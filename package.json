@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "dependencies": {
+    "jscs": "^2.11.0"
+  },
+  "scripts": {
+    "test": "mocha test/*",
+    "lint": "jscs ."
+  },
+  "devDependencies": {
+    "chai": "^3.5.0",
+    "mocha": "^2.4.5",
+    "sinon": "^1.17.3",
+    "test": "^0.6.0"
+  }
+}
