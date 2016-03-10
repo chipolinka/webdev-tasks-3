@@ -5,17 +5,18 @@ const expect = require('chai').expect;
 const sinon = require('sinon');
 
 describe('serial', () => {
-    it('should execute functions in sequence', () => {
+    it('should execute functions in sequence', done => {
         var firstSpy = sinon.spy(next => {
-            next(null, 'first');
+            setTimeout(next, 0, null, 'first');
         });
         var secondSpy = sinon.spy((data, next) => {
-            next(null, data + ' data');
+            setTimeout(next, 0, null, data + ' data');
         });
         flow.serial([firstSpy, secondSpy], (err, data) => {
-            expect(data === 'first data').to.be.true;
+            expect(data).to.be.equal('first data');
             expect(err).to.equal(null);
             expect(secondSpy.calledAfter(firstSpy)).to.be.true;
+            done();
         });
     });
     it('should work on empty data', () => {
@@ -24,49 +25,52 @@ describe('serial', () => {
             expect(err).to.equal(null);
         });
     });
-    it('callback should be called once', () => {
+    it('callback should be called once', done => {
         var firstSpy = sinon.spy(next => {
-            next(null, 0);
+            setTimeout(next, 0, null, 0);
         });
         var secondSpy = sinon.spy((data, next) => {
-            next(null, data + 1);
+            setTimeout(next, 0, null, data + 1);
         });
         var thirdSpy = sinon.spy((data, next) => {
-            next(null, data + 1);
+            setTimeout(next, 0, null, data + 2);
         });
         flow.serial([firstSpy, secondSpy, thirdSpy], (err, data) => {
-            expect(data).to.equal(2);
+            expect(data).to.equal(3);
             expect(err).to.be.null;
             expect(this).to.have.been.calledOnce;
+            done();
         });
     });
-    it('should call callback if error', () => {
+    it('should call callback if error', done => {
         var firstSpy = sinon.spy(next => {
-            next(true, 0);
+            setTimeout(next, 0, new Error('Error!'), 0);
         });
         var secondSpy = sinon.spy((data, next) => {
-            next(null, data + 1);
+            setTimeout(next, 0, null, data + 1);
         });
         flow.serial([firstSpy, secondSpy], (err, data) => {
-            expect(err).to.be.true;
+            expect(err.message).to.equal('Error!');
             expect(this).to.have.been.calledOnce;
             expect(secondSpy.notCalled).to.be.true;
+            done();
         });
     });
 });
 describe('parallel', () => {
-    it('should process the data in the correct order', () => {
+    it('should process the data in the correct order', done => {
         var firstSpy = sinon.spy(next => {
-            next(null, 0);
+            setTimeout(next, 0, null, 0);
         });
         var secondSpy = sinon.spy(next => {
-            next(null, 1);
+            setTimeout(next, 0, null, 1);
         });
         flow.parallel([firstSpy, secondSpy], (err, data) => {
             expect(data.length).to.equal(2);
             expect(err).to.be.null;
             expect(data[0]).to.equal(0);
             expect(data[1]).to.equal(1);
+            done();
         });
     });
     it('should work on empty data', () => {
@@ -75,90 +79,98 @@ describe('parallel', () => {
             expect(err).to.be.null;
         });
     });
-    it('callback should be called once', () => {
+    it('callback should be called once', done => {
         var firstSpy = sinon.spy(next => {
-            next(null, 0);
+            setTimeout(next, 0, null, 0);
         });
         var secondSpy = sinon.spy(next => {
-            next(new Error('Error!'), 1);
+            setTimeout(next, 0, new Error('Error!'), 1);
         });
         var thirdSpy = sinon.spy(next => {
-            next(null, 2);
+            setTimeout(next, 0, null, 2);
         });
-        flow.parallel([firstSpy, secondSpy, thirdSpy], (err, data) => {
+        var callback = (err, data) => {
             expect(err.message).to.equal('Error!');
-            expect(this).to.have.been.calledOnce;
             expect(thirdSpy).to.have.been.calledOnce;
-        });
+            expect(callback).to.have.been.calledOnce;
+            done();
+        };
+        flow.parallel([firstSpy, secondSpy, thirdSpy], callback);
     });
-    it('should run all functions, if there are errors', () => {
+    it('should run all functions, if there are errors', done => {
         var firstSpy = sinon.spy(next => {
-            next(new Error('Error!'), 0);
+            setTimeout(next, 0, new Error('Error!'), 0);
         });
         var secondSpy = sinon.spy(next => {
-            next(new Error('Error!!'), 1);
+            setTimeout(next, 0, new Error('Error!!'), 1);
         });
         var thirdSpy = sinon.spy(next => {
-            next(null, 2);
+            setTimeout(next, 0, null, 2);
         });
-        flow.parallel([firstSpy, secondSpy, thirdSpy], (err, data) => {
+        var callback = (err, data) => {
             expect(err.message).to.equal('Error!');
-            expect(this).to.have.been.calledOnce;
             expect(thirdSpy).to.have.been.calledOnce;
-        });
+            expect(callback).to.have.been.calledOnce;
+            done();
+        };
+        flow.parallel([firstSpy, secondSpy, thirdSpy], callback);
     });
-    it('should run all functions, if the limit is less than the number of functions', () => {
+    it('should run all functions, if the limit is less than the number of functions', done => {
         var firstSpy = sinon.spy(next => {
-            setTimeout(() => (next(null, 0)), 5000);
+            setTimeout(next, 800, null, 0);
         });
         var secondSpy = sinon.spy(next => {
-            setTimeout(() => (next(null, 1)), 1000);
+            setTimeout(next, 1000, null, 1);
         });
         var thirdSpy = sinon.spy(next => {
-            setTimeout(() => (next(null, 2)), 500);
+            setTimeout(next, 500, null, Date.now());
         });
+        var startTime = Date.now();
         flow.parallel([firstSpy, secondSpy, thirdSpy], 2, (err, data) => {
             expect(data[0]).to.equal(0);
             expect(data[1]).to.equal(1);
-            expect(data[2]).to.equal(2);
+            expect(data[2] - startTime).to.be.least(800);
+            done();
         });
     });
-    it('should return [], if limit is equal 0', () => {
+    it('should return [], if limit is equal 0', done => {
         var firstSpy = sinon.spy(next => {
-            next(null, 0);
+            setTimeout(next, 0, null, 0);
         });
         var secondSpy = sinon.spy(next => {
-            next(null, 1);
+            setTimeout(next, 0, null, 1);
         });
         var thirdSpy = sinon.spy(next => {
-            next(null, 2);
+            setTimeout(next, 0, null, 2);
         });
         flow.parallel([firstSpy, secondSpy, thirdSpy], 0, (err, data) => {
             expect(data).to.deep.equal([]);
             expect(err).to.be.null;
+            done();
         });
     });
-    it('should run all functions, if limit is greater than the number of functions', () => {
+    it('should run all functions, if limit is greater than the number of functions', done => {
         var firstSpy = sinon.spy(next => {
-            next(null, 0);
+            setTimeout(next, 0, null, 0);
         });
         var secondSpy = sinon.spy(next => {
-            next(null, 1);
+            setTimeout(next, 0, null, 1);
         });
         var thirdSpy = sinon.spy(next => {
-            next(null, 2);
+            setTimeout(next, 0, null, 2);
         });
         flow.parallel([firstSpy, secondSpy, thirdSpy], 4, (err, data) => {
             expect(data).to.deep.equal([0, 1, 2]);
             expect(err).to.be.null;
+            done();
         });
     });
 });
 
 describe('map', () => {
-    it('should process the data in the correct order', () => {
+    it('should process the data in the correct order', done => {
         var spy = sinon.spy((data, next) => {
-            next(null, data);
+            setTimeout(next, 0, null, data);
         });
         flow.map([0, 1, 2], spy, (err, data) => {
             expect(data.length).to.equal(3);
@@ -166,41 +178,46 @@ describe('map', () => {
             expect(data[0]).to.equal(0);
             expect(data[1]).to.equal(1);
             expect(data[2]).to.equal(2);
+            done();
         });
     });
-    it('should work on empty data', () => {
+    it('should work on empty data', done => {
         var spy = sinon.spy((data, next) => {
-            next(null, data);
+            setTimeout(next, 0, null, data);
         });
         flow.map([], spy, (err, data) => {
             expect(data).to.deep.equal([]);
             expect(err).to.equal(null);
+            done();
         });
     });
-    it('callback should be called once', () => {
+    it('callback should be called once', done => {
         var spy = sinon.spy((data, next) => {
-            next(new Error('Error!'), data);
+            setTimeout(next, 0, new Error('Error!'), data);
         });
-        flow.map([0, 1, 2], spy, (err, data) => {
+        var callback = (err, data) => {
             expect(err.message).to.equal('Error!');
-            expect(this).to.have.been.calledOnce;
-        });
+            expect(callback).to.have.been.calledOnce;
+            done();
+        };
+        flow.map([0, 1, 2], spy, callback);
     });
-    it('should process all the data', () => {
+    it('should process all the data', done => {
         var spy = sinon.spy((data, next) => {
-            next(null, data);
+            setTimeout(next, 0, null, data);
         });
         flow.map([0, 1, 2], spy, (err, data) => {
             expect(data[0]).to.equal(0);
             expect(data[1]).to.equal(1);
             expect(data[2]).to.equal(2);
             expect(spy).to.have.been.calledThrice;
+            done();
         });
     });
 });
 
 describe('makeAsync', () => {
-    it('should correctly process the data', () => {
+    it('should correctly process the data', done => {
         var syncFunction = (a, b) => {
             return a + b;
         };
@@ -208,26 +225,26 @@ describe('makeAsync', () => {
         asynFunction(1, 2, (err, data) => {
             expect(data).to.equal(3);
             expect(err).to.be.null;
+            done();
         });
     });
-    it('should run callback with error', () => {
+    it('should run callback with error', done => {
         var syncFunction = (a, b) => {
             throw new Error('Error!');
         };
         var asynFunction = flow.makeAsync(syncFunction);
         asynFunction(1, 2, (err, data) => {
             expect(err.message).to.equal('Error!');
+            done();
         });
     });
-    it('should run functions in parallel', () => {
-        var syncSum = (a, b) => {
+    it('should run functions in parallel', done => {
+        var asynSum = flow.makeAsync((a, b) => {
             return a + b;
-        };
-        var syncSub = (a, b) => {
+        });
+        var asynSub = flow.makeAsync((a, b) => {
             return a - b;
-        };
-        var asynSum = flow.makeAsync(syncSum);
-        var asynSub = flow.makeAsync(syncSub);
+        });
         var spySum = sinon.spy(next => {
             asynSum(1, 2, (err, data) => {
                 next(null, data);
@@ -242,6 +259,7 @@ describe('makeAsync', () => {
             expect(err).to.be.null;
             expect(data[0]).to.equal(3);
             expect(data[1]).to.equal(1);
+            done();
         });
     });
 });
